@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ta-Te-Ti vs IA</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.0.0/dist/tf.min.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: #f0f2f5;
+        margin: 0;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      #status {
+        margin: 15px;
+        font-weight: bold;
+        color: #555;
+      }
+      .board {
+        display: grid;
+        grid-template-columns: repeat(3, 100px);
+        gap: 10px;
+        background: #ddd;
+        padding: 10px;
+        border-radius: 8px;
+      }
+      .cell {
+        width: 100px;
+        height: 100px;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        cursor: pointer;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .cell:hover {
+        background: #e9e9e9;
+      }
+      .cell.taken {
+        cursor: not-allowed;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        margin-top: 20px;
+        border: none;
+        border-radius: 5px;
+        background: #007bff;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Ta-Te-Ti contra IA</h1>
+    <div id="status">Cargando modelo neuronal...</div>
+    <div class="board" id="boardGrid"></div>
+    <button onclick="reiniciarJuego()">Reiniciar Partida</button>
+
+    <script>
+      let model;
+      let board = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      let juegoTerminado = false;
+
+      async function init() {
+        try {
+          model = await tf.loadLayersModel("model/ttt_model.json");
+          document.getElementById("status").innerText =
+            "Modelo cargado. ¡Tu turno (X)!";
+          renderizarTablero();
+        } catch (e) {
+          document.getElementById("status").innerText =
+            "Error: Asegúrate de usar Live Server.";
+          console.error(e);
+        }
+      }
+
+      function renderizarTablero() {
+        const grid = document.getElementById("boardGrid");
+        grid.innerHTML = "";
+        board.forEach((val, i) => {
+          const cell = document.createElement("div");
+          cell.className = "cell" + (val !== 0 ? " taken" : "");
+          cell.innerText = val === -1 ? "X" : val === 1 ? "O" : "";
+          cell.onclick = () => humanoMueve(i);
+          grid.appendChild(cell);
+        });
+      }
+
+      function humanoMueve(i) {
+        if (juegoTerminado || board[i] !== 0) return;
+        board[i] = -1;
+        renderizarTablero();
+        if (!verificarFin()) {
+          document.getElementById("status").innerText =
+            "La IA está pensando...";
+          setTimeout(iaMueve, 500);
+        }
+      }
+
+      function iaMueve() {
+        tf.tidy(() => {
+          const input = tf.tensor2d([board]);
+          const prediction = model.predict(input).dataSync();
+
+          let mejorMovimiento = -1;
+          let maxProb = -Infinity;
+
+          for (let i = 0; i < 9; i++) {
+            if (board[i] === 0 && prediction[i] > maxProb) {
+              maxProb = prediction[i];
+              mejorMovimiento = i;
+            }
+          }
+          if (mejorMovimiento !== -1) board[mejorMovimiento] = 1;
+        });
+        renderizarTablero();
+        verificarFin();
+        if (!juegoTerminado)
+          document.getElementById("status").innerText = "Tu turno (X)";
+      }
+
+      function verificarFin() {
+        // Lógica simple para detectar fin de juego (aquí podrías expandir con todas las combinaciones)
+        if (!board.includes(0)) {
+          document.getElementById("status").innerText = "Juego terminado.";
+          juegoTerminado = true;
+          return true;
+        }
+        return false;
+      }
+
+      function reiniciarJuego() {
+        board = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+        juegoTerminado = false;
+        document.getElementById("status").innerText = "Tu turno (X)";
+        renderizarTablero();
+      }
+
+      init();
+    </script>
+  </body>
+</html>
